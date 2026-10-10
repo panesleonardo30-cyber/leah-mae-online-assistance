@@ -10,7 +10,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, "appointments.db");
 const db = new sqlite3.Database(DB_PATH);
 
-db.serialize(() => {
+function initializeDatabase(callback) {
     db.run(`
         CREATE TABLE IF NOT EXISTS appointments (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -19,33 +19,55 @@ db.serialize(() => {
             contact TEXT NOT NULL,
             createdAt TEXT DEFAULT CURRENT_TIMESTAMP
         )
-    `);
+    `, (createErr) => {
+        if (createErr) return callback(createErr);
 
-    const columns = [
-        "email TEXT",
-        "address TEXT",
-        "preferredDate TEXT",
-        "preferredTime TEXT",
-        "message TEXT",
-        "paymentMethod TEXT",
-        "paymentTiming TEXT",
-        "status TEXT DEFAULT \'Pending\'"
-    ];
+        db.all("PRAGMA table_info(appointments)", (pragmaErr, rows) => {
+            if (pragmaErr) return callback(pragmaErr);
 
-    columns.forEach(column => {
-        const columnName = column.split(" ")[0];
+            const existing = new Set(rows.map(row => row.name));
+            const migrations = [
+                ["email", "TEXT"],
+                ["address", "TEXT"],
+                ["preferredDate", "TEXT"],
+                ["preferredTime", "TEXT"],
+                ["message", "TEXT"],
+                ["paymentMethod", "TEXT"],
+                ["paymentTiming", "TEXT"],
+                ["status", "TEXT DEFAULT 'Pending'"],
+                ["requestKey", "TEXT"],
+                ["requestHash", "TEXT"]
+            ];
 
-        db.all(`PRAGMA table_info(appointments)`, (err, rows) => {
-            if (err) return;
+            function addNext(index) {
+                if (index >= migrations.length) {
+                    return db.run(
+                        `CREATE UNIQUE INDEX IF NOT EXISTS
+                         idx_appointments_requestKey
+                         ON appointments(requestKey)`,
+                        callback
+                    );
+                }
 
-            const exists = rows.some(row => row.name === columnName);
+                const [name, definition] = migrations[index];
 
-            if (!exists) {
-                db.run(`ALTER TABLE appointments ADD COLUMN ${column}`);
+                if (existing.has(name)) {
+                    return addNext(index + 1);
+                }
+
+                db.run(
+                    `ALTER TABLE appointments ADD COLUMN ${name} ${definition}`,
+                    (alterErr) => {
+                        if (alterErr) return callback(alterErr);
+                        addNext(index + 1);
+                    }
+                );
             }
+
+            addNext(0);
         });
     });
-});
+}
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -357,19 +379,16 @@ app.delete("/api/appointments/:id", requireAdmin, (req, res) => {
     );
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(
-        `Leah Mae Online Assistance running at http://localhost:${PORT}`
-    );
+// Start server only after database migrations finish
+initializeDatabase((err) => {
+    if (err) {
+        console.error("Database initialization failed:", err.message);
+        process.exit(1);
+    }
+
+    app.listen(PORT, () => {
+        console.log(
+            `Leah Mae Online Assistance running at http://localhost:${PORT}`
+        );
+    });
 });
-
-
-
-
-
-
-
-
-
-

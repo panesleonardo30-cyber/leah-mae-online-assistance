@@ -86,6 +86,51 @@
             box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.13);
         }
 
+        input[type="time"] {
+            min-height: 52px;
+            color: #0f172a;
+            background-color: #ffffff;
+            color-scheme: light;
+            -webkit-appearance: auto;
+            appearance: auto;
+        }
+
+        /* CUSTOM PREFERRED CLOCK */
+
+#preferredTimeDisplay { cursor:pointer; }
+#openTimePicker {
+  width:100%; padding:12px; margin-bottom:16px;
+  border:0; border-radius:9px; background:#1d4ed8;
+  color:white; font-size:16px; font-weight:bold;
+}
+#clockOverlay {
+  display:none; position:fixed; inset:0; z-index:99999;
+  background:#0009; align-items:center; justify-content:center;
+  padding:12px;
+}
+#clockOverlay.open { display:flex; }
+#clockBox {
+  width:100%; max-width:340px; background:white; color:#111827;
+  border-radius:18px; padding:18px; text-align:center;
+}
+#clockDial {
+  width:min(75vw,260px); height:min(75vw,260px);
+  margin:16px auto; border-radius:50%; background:#e8eef8;
+  position:relative;
+}
+#clockDial button {
+  position:absolute; transform:translate(-50%,-50%);
+  width:38px; height:38px; border:0; border-radius:50%;
+  background:transparent; color:#111827; font-weight:bold;
+}
+#clockDial button.selected { background:#1d4ed8; color:white; }
+#clockPreview { font-size:25px; font-weight:bold; margin:12px; }
+#clockBox .clockAction {
+  padding:11px; border-radius:8px; border:1px solid #ccc;
+  font-size:16px; margin:4px;
+}
+#clockSet { background:#1d4ed8; color:white; }
+
         textarea {
             min-height: 90px;
             resize: vertical;
@@ -159,6 +204,11 @@
     color: #234b80;
 }
 
+/* CLOCK POLISH */
+#clockAM,#clockPM{min-width:85px;min-height:44px;border-radius:24px;border:2px solid #2563eb;font-weight:bold;font-size:16px}
+#clockAM.active,#clockPM.active{background:#2563eb!important;color:white!important}
+#clockPreview{font-size:30px;font-weight:bold;text-align:center;padding:14px;border-radius:14px;background:#eff6ff;color:#1d4ed8;margin:12px 0}
+#clockSet{background:#1d4ed8!important;color:white!important;font-weight:bold;min-height:46px;border-radius:12px}
 </style>
 
     <meta name="theme-color" content="#1d4ed8">
@@ -253,12 +303,13 @@
     >
 
     <label>Preferred Time</label>
-    <input
-        type="time"
-        name="preferredTime"
-    >
-
-    <label>Additional Message</label>
+<div class="preferred-time-row">
+  <input type="text" id="preferredTimeDisplay"
+    placeholder="Tap to choose time" readonly required>
+  <input type="hidden" id="preferredTime" name="preferredTime">
+  <button type="button" id="openTimePicker">Choose on Clock</button>
+</div>
+<label>Additional Message</label>
     <textarea
         name="message"
         placeholder="Additional information or request..."
@@ -340,6 +391,100 @@ if ("serviceWorker" in navigator) {
       .catch((error) => console.error("Service worker registration failed:", error));
   });
 }
+</script>
+
+
+<div id="clockOverlay">
+ <div id="clockBox" role="dialog" aria-modal="true">
+  <h3>Choose Preferred Time</h3>
+  <div id="clockPreview">09:00 AM</div>
+  <button type="button" class="clockAction" id="clockAM">AM</button>
+  <button type="button" class="clockAction" id="clockPM">PM</button>
+  <div id="clockDial"></div>
+  <p id="clockHint">Choose an hour</p>
+  <button type="button" class="clockAction" id="clockCancel">Cancel</button>
+  <button type="button" class="clockAction" id="clockSet">Set Time</button>
+ </div>
+</div>
+<script>
+(() => {
+ const display=document.getElementById('preferredTimeDisplay');
+ const field=document.getElementById('preferredTime');
+ const overlay=document.getElementById('clockOverlay');
+ const dial=document.getElementById('clockDial');
+ const preview=document.getElementById('clockPreview');
+ const hint=document.getElementById('clockHint');
+ let hour=9, minute=0, period='AM', stage='hour', chosenMinute=false;
+
+ function update(){
+   preview.textContent=String(hour).padStart(2,'0')+':'+
+     String(minute).padStart(2,'0')+' '+period;
+   document.getElementById('clockAM').classList.toggle('active',period==='AM');
+   document.getElementById('clockPM').classList.toggle('active',period==='PM');
+ }
+ function draw(){
+   dial.innerHTML='';
+   const values=stage==='hour'
+     ?Array.from({length:12},(_,i)=>i+1)
+     :Array.from({length:12},(_,i)=>i*5);
+   values.forEach((v,i)=>{
+     const a=(i*30-90)*Math.PI/180;
+     const b=document.createElement('button');
+     b.type='button';
+     b.textContent=stage==='hour'?v:String(v).padStart(2,'0');
+     b.style.left=(50+39*Math.cos(a))+'%';
+     b.style.top=(50+39*Math.sin(a))+'%';
+     if(stage==='hour'&&v===hour || stage==='minute'&&v===minute)
+       b.classList.add('selected');
+     b.onclick=()=>{
+       if(stage==='hour'){
+         hour=v; stage='minute'; chosenMinute=false;
+         hint.textContent='Now choose minutes';
+       }else{
+         minute=v; chosenMinute=true;
+         hint.textContent='Tap Set Time to confirm';
+       }
+       update(); draw();
+     };
+     dial.appendChild(b);
+   });
+ }
+ function open(){
+   const m=/^(\d{2}):(\d{2})$/.exec(field.value);
+   if(m){
+     let h=Number(m[1]); minute=Number(m[2]);
+     period=h>=12?'PM':'AM'; hour=h%12||12;
+     chosenMinute=true;
+   }else{
+     hour=9; minute=0; period='AM'; chosenMinute=false;
+   }
+   stage='hour'; hint.textContent='Choose an hour';
+   update(); draw(); overlay.classList.add('open');
+ }
+ document.getElementById('openTimePicker').onclick=open;
+ display.onclick=open;
+ document.getElementById('clockAM').onclick=()=>{period='AM';update();};
+ document.getElementById('clockPM').onclick=()=>{period='PM';update();};
+ document.getElementById('clockCancel').onclick=()=>overlay.classList.remove('open');
+ document.getElementById('clockSet').onclick=()=>{
+   if(stage==='hour'){
+     hint.textContent='Choose an hour, then minutes';
+     return;
+   }
+   if(!chosenMinute){
+     hint.textContent='Choose minutes on the clock first';
+     return;
+   }
+   let h=hour%12+(period==='PM'?12:0);
+   field.value=String(h).padStart(2,'0')+':'+String(minute).padStart(2,'0');
+   display.value=String(hour).padStart(2,'0')+':'+
+     String(minute).padStart(2,'0')+' '+period;
+   overlay.classList.remove('open');
+ };
+ document.getElementById('appointmentForm').addEventListener('reset',()=>{
+   field.value=''; display.value='';
+ });
+})();
 </script>
 
 </body>

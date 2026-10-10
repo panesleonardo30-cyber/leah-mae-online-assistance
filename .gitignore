@@ -6,3 +6,8 @@ node_modules/
 *.db-*
 backups/
 server.log
+
+# Local backups and database copies
+*.backup*
+*.before-*
+*.time-backup

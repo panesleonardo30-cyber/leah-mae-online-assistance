@@ -1,9 +1,11 @@
-const CACHE_NAME = "leah-mae-static-v1";
+const CACHE_NAME = "leah-mae-static-v2";
 
 const STATIC_ASSETS = [
   "/manifest.webmanifest",
   "/icons/icon-192.svg",
   "/icons/icon-512.svg",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
   "/leah-mae-photo.jpg"
 ];
 

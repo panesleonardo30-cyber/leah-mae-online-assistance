@@ -11,3 +11,8 @@ server.log
 *.backup*
 *.before-*
 *.time-backup
+appointments-export.json
+convert-neon.py
+server.js.pre-neon-*
+server.js.before-postgres
+server.js.before-postgres-*

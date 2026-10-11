@@ -14,7 +14,8 @@
   "type": "commonjs",
   "dependencies": {
     "express": "^5.2.1",
-    "sqlite3": "^5.1.7"
+    "pg": "^8.23.1",
+    "resend": "^6.32.1"
   },
   "allowScripts": {
     "sqlite3@6.0.1": true

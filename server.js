@@ -6,6 +6,7 @@ const { Pool } = require("pg");
 const { createClient } = require("@supabase/supabase-js");
 const multer = require("multer");
 const createCustomerRoutes = require("./customer-routes");
+const createMessengerRoutes = require("./messenger-routes");
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -147,6 +148,14 @@ function requireAdmin(req, res, next) {
     next();
 }
 
+const messengerRoutes = createMessengerRoutes(pool, {
+    supabase,
+    storageBucket: STORAGE_BUCKET,
+    requireAdmin,
+    fileUpload: resultUpload
+});
+app.use(messengerRoutes.router);
+
 app.post("/api/admin/login", (req, res) => {
     if (!ADMIN_PASSWORD) {
         return res.status(503).json({
@@ -264,6 +273,12 @@ app.post("/api/appointments", async (req, res) => {
 
         try {
             const customer = await customerRoutes.getCustomerFromRequest(req);
+            if (!customer) {
+                return res.status(401).json({
+                    success: false,
+                    message: "Mag-login muna bago magsumite ng application."
+                });
+            }
             const result = await pool.query(`
                 INSERT INTO public.appointments (
                     "fullName", service, contact, email, address,
@@ -576,6 +591,7 @@ initializeDatabase(async (err) => {
 
     try {
         await customerRoutes.initializeCustomerTables();
+        await messengerRoutes.initializeMessengerTables();
     } catch (customerDbError) {
         console.error("Customer database initialization failed:", customerDbError.message);
         process.exit(1);

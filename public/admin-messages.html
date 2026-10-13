@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Customer Inbox | Leah Mae Online Assistance</title>
+<style>
+:root{color-scheme:light;--green:#163a35;--green2:#24574d;--cream:#f7f5ef;--ink:#202d2a;--muted:#687873;--line:#e4e9e5}
+*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font:16px system-ui,Arial,sans-serif;line-height:1.5}
+header{background:linear-gradient(135deg,#163a35,#28584d);color:white;padding:22px}header h1,header p{max-width:1100px;margin:0 auto}header p{color:#d9e8e1;font-size:14px}
+main{max-width:1100px;margin:22px auto;padding:0 14px 35px}
+.grid{display:grid;grid-template-columns:minmax(220px, .8fr) minmax(0,1.6fr);gap:16px}
+section{background:white;border:1px solid var(--line);border-radius:16px;padding:16px;min-width:0}
+h2{font-size:19px;color:var(--green);margin:0 0 12px}
+button,a.link{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:10px 14px;border:0;border-radius:9px;background:var(--green);color:white;text-decoration:none;font:inherit;font-weight:650;cursor:pointer}
+button:disabled{opacity:.55}input,textarea{width:100%;padding:12px;border:1px solid #d5ded8;border-radius:9px;font:inherit;margin:6px 0 12px}
+.customer{display:block;width:100%;text-align:left;margin:7px 0;background:#edf3ee;color:var(--ink);overflow-wrap:anywhere}
+.customer.active{background:#cfe5d8}.muted,#status{font-size:13px;color:var(--muted)}
+#chat{height:350px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fafcf9}
+.bubble{max-width:88%;padding:10px 12px;margin:10px 0;border-radius:12px;background:#edf3ee;overflow-wrap:anywhere}
+.bubble.mine{margin-left:auto;background:#dcece3}.who{font-size:12px;color:var(--muted)}
+@media(max-width:700px){.grid{grid-template-columns:1fr}#chat{height:300px}header{padding:18px}}
+</style>
+</head>
+<body>
+<header><h1>Leah Mae Online Assistance</h1><p>Admin Customer Inbox & Private Messenger</p></header>
+<main>
+<p><a class="link" href="/admin.html">Back to Admin Dashboard</a></p>
+<div class="grid">
+<section>
+<h2>Customers</h2>
+<div id="customers">Loading customers...</div>
+<p id="inboxStatus" class="muted" role="status"></p>
+<button id="refreshBtn" type="button">Refresh Inbox</button>
+</section>
+<section>
+<h2 id="conversationTitle">Choose a customer</h2>
+<div id="chat" aria-live="polite">Select a customer to view messages.</div>
+<form id="sendForm">
+<label for="message">Reply to customer</label>
+<textarea id="message" rows="3" maxlength="2000" required placeholder="Type your reply..." disabled></textarea>
+<button id="sendBtn" type="submit" disabled>Send Reply</button>
+</form>
+<hr>
+<h2>Send a File</h2>
+<p class="muted">PDF, JPG, or PNG only. Maximum 10 MB. File is sent to the selected customer's private account.</p>
+<form id="fileForm">
+<input id="fileInput" type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" required disabled>
+<button id="uploadBtn" type="submit" disabled>Send File to Customer</button>
+</form>
+<p id="status" role="status"></p>
+</section>
+</div>
+</main>
+<script>
+const customersEl=document.getElementById('customers');
+const chat=document.getElementById('chat');
+const title=document.getElementById('conversationTitle');
+const statusEl=document.getElementById('status');
+const inboxStatus=document.getElementById('inboxStatus');
+let selectedId=null, selectedButton=null;
+
+async function api(url,options={}){
+  const response=await fetch(url,{credentials:'same-origin',...options});
+  const data=await response.json().catch(()=>({message:'Unexpected server response.'}));
+  if(response.status===401){throw new Error('Admin session expired. Please sign in at the Admin Dashboard.');}
+  if(!response.ok)throw new Error(data.message||'Request failed.');
+  return data;
+}
+function addText(parent,tag,text,className){
+  const el=document.createElement(tag);el.textContent=text||'';if(className)el.className=className;parent.appendChild(el);return el;
+}
+async function loadCustomers(){
+  try{
+    const data=await api('/api/admin/customers');customersEl.replaceChildren();
+    if(!data.customers.length)addText(customersEl,'p','No customer accounts found.');
+    for(const c of data.customers){
+      const btn=addText(customersEl,'button',(c.fullName||'Customer')+' · '+c.email,'customer');
+      btn.type='button';if(String(c.id)===String(selectedId)){btn.classList.add('active');selectedButton=btn;}
+      const last=addText(btn,'span',c.lastMessage||'No messages yet','muted');last.style.display='block';
+      btn.addEventListener('click',()=>selectCustomer(c,btn));
+    }
+  }catch(e){inboxStatus.textContent=e.message;}
+}
+async function selectCustomer(c,btn){
+  selectedId=String(c.id);selectedButton=btn;
+  title.textContent=(c.fullName||'Customer')+' — '+c.email;
+  document.getElementById('message').disabled=false;
+  document.getElementById('sendBtn').disabled=false;
+  document.getElementById('fileInput').disabled=false;
+  document.getElementById('uploadBtn').disabled=false;
+  document.querySelectorAll('.customer').forEach(x=>x.classList.remove('active'));btn.classList.add('active');
+  await loadMessages();
+}
+async function loadMessages(){
+  if(!selectedId)return;
+  try{
+    const data=await api('/api/admin/customers/'+encodeURIComponent(selectedId)+'/messages');
+    chat.replaceChildren();
+    if(!data.messages.length)addText(chat,'p','No messages yet. You can send the first reply.');
+    for(const m of data.messages){
+      const bubble=document.createElement('div');
+      bubble.className='bubble'+(m.senderRole==='admin'?' mine':'');
+      addText(bubble,'div',m.senderRole==='admin'?'Admin':'Customer','who');
+      if(m.message)addText(bubble,'div',m.message);
+      if(m.hasFile)addText(bubble,'p','Attached file: '+(m.fileName||'Document'),'muted');
+      addText(bubble,'div',m.createdAt?new Date(m.createdAt).toLocaleString():'','who');
+      chat.appendChild(bubble);
+    }
+    chat.scrollTop=chat.scrollHeight;
+  }catch(e){statusEl.textContent=e.message;}
+}
+document.getElementById('sendForm').addEventListener('submit',async e=>{
+  e.preventDefault();if(!selectedId)return;
+  const field=document.getElementById('message'),btn=document.getElementById('sendBtn');
+  const message=field.value.trim();if(!message)return;
+  btn.disabled=true;statusEl.textContent='Sending reply...';
+  try{
+    await api('/api/admin/customers/'+encodeURIComponent(selectedId)+'/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});
+    field.value='';statusEl.textContent='Reply sent.';await loadMessages();await loadCustomers();
+  }catch(err){statusEl.textContent=err.message;}
+  finally{btn.disabled=false;}
+});
+document.getElementById('fileForm').addEventListener('submit',async e=>{
+  e.preventDefault();if(!selectedId)return;
+  const input=document.getElementById('fileInput'),btn=document.getElementById('uploadBtn');
+  if(!input.files.length)return;
+  const file=input.files[0];
+  if(file.size>10*1024*1024){statusEl.textContent='Maximum file size is 10 MB.';return;}
+  btn.disabled=true;statusEl.textContent='Uploading file...';
+  try{
+    const body=new FormData();body.append('file',file);
+    await api('/api/admin/customers/'+encodeURIComponent(selectedId)+'/files',{method:'POST',body});
+    input.value='';statusEl.textContent='File sent to customer account.';await loadMessages();await loadCustomers();
+  }catch(err){statusEl.textContent=err.message;}
+  finally{btn.disabled=false;}
+});
+document.getElementById('refreshBtn').addEventListener('click',()=>{loadCustomers();loadMessages();});
+loadCustomers();
+setInterval(()=>{loadCustomers();loadMessages();},10000);
+</script>
+</body>
+</html>

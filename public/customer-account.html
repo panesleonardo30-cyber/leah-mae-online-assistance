@@ -1,50 +1,70 @@
 <!doctype html>
-<html lang="fil">
+<html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Customer Account | Leah Mae</title>
+<title>Your Customer Dashboard | Leah Mae Online Assistance</title>
 <style>
-body{font-family:Arial,sans-serif;background:#f4f6fb;margin:0;color:#24304a}
-header{background:#243b70;color:white;padding:18px}
-main{max-width:760px;margin:20px auto;padding:16px}
-section{background:white;padding:18px;margin:14px 0;border-radius:12px}
-button{padding:11px 16px;border:0;border-radius:8px;background:#243b70;color:white}
-input{box-sizing:border-box;width:100%;padding:11px;margin:6px 0;border:1px solid #ccc;border-radius:7px}
-.item{border-bottom:1px solid #ddd;padding:12px 0}
-.muted{color:#667085}
+
+:root{color-scheme:light;--green:#163a35;--green2:#24574d;--cream:#f7f5ef;--ink:#202d2a;--muted:#687873;--line:#e4e9e5;--white:#fff}
+*{box-sizing:border-box}
+body{font-family:Inter,system-ui,-apple-system,"Segoe UI",Arial,sans-serif;background:var(--cream);margin:0;color:var(--ink);line-height:1.55}
+header{background:linear-gradient(135deg,#163a35,#28584d);color:#fff;padding:25px 20px 30px}
+header h2{max-width:900px;margin:0 auto;font-size:clamp(22px,4vw,30px);letter-spacing:-.5px}
+header p{max-width:900px;margin:5px auto 0;color:#d9e8e1;font-size:14px}
+main{max-width:900px;margin:22px auto;padding:0 16px 35px}
+section{background:var(--white);padding:22px;margin:16px 0;border:1px solid var(--line);border-radius:18px;box-shadow:0 5px 22px #203b3010}
+h3{font-size:18px;margin:0 0 14px;color:var(--green);letter-spacing:-.2px}
+p{overflow-wrap:anywhere}
+button,.primary-link{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:44px;padding:11px 16px;border:0;border-radius:10px;background:var(--green);color:#fff;font:inherit;font-weight:650;text-decoration:none;cursor:pointer}
+button:hover,.primary-link:hover{background:var(--green2)}
+button:focus-visible,a:focus-visible,input:focus-visible{outline:3px solid #8fc5ae;outline-offset:2px}
+input{display:block;width:100%;min-height:45px;padding:11px 12px;margin:7px 0 15px;border:1px solid #d5ded8;border-radius:10px;background:#fff;color:var(--ink);font:inherit}
+label{font-size:14px;font-weight:650;color:#34463f}
+a{color:var(--green2);font-weight:600}
+.item{padding:16px 0;border-bottom:1px solid var(--line)}
+.item:last-child{border-bottom:0}
+.item strong{font-size:16px;color:var(--green)}
+.item p{margin:7px 0 12px;color:var(--muted);font-size:14px}
+.muted,#profileMsg,#appointmentMsg{color:var(--muted);font-size:14px}
+#profile{padding:12px 14px;background:#f5f8f5;border-radius:10px}
 #msg{overflow-wrap:anywhere}
+section>p:last-child{margin-bottom:0}
+@media(min-width:650px){main{padding-left:22px;padding-right:22px}section{padding:26px}}
+@media(max-width:480px){header{padding:22px 18px}main{margin:14px auto;padding:0 12px 24px}section{padding:18px;margin:12px 0;border-radius:15px}button,.primary-link{width:100%}}
+
 </style>
 </head>
 <body>
 <header>
 <h2>Leah Mae Online Assistance</h2>
-<p>Customer Dashboard</p>
+<p>Your Customer Dashboard</p>
 </header>
 <main>
 <section>
 <h3>My Profile</h3>
-<p id="profile">Loading profile...</p>
+<p id="profile">Loading your profile...</p>
 <form id="profileForm" hidden>
 <label>Full Name</label>
 <input name="fullName" required>
-<label>Contact number</label>
+<label>Contact Number</label>
 <input name="contact" required>
-<label>Address</label>
+<label>Complete Complete Address</label>
 <input name="address">
-<button type="submit">Save Profile</button>
+<button type="submit">Save Changes</button>
 </form>
 <p id="profileMsg"></p>
 </section>
 <section>
+<p><a class="primary-link" href="/customer-messages.html">Open Private Messenger & My Files</a></p>
 <h3>My Appointments</h3>
-<p id="appointmentMsg">Loading appointments...</p>
+<p id="appointmentMsg">Loading your appointments...</p>
 <div id="appointments"></div>
-<p><a href="/application.html">Book a New Appointment</a></p>
+<p><a href="/application.html">Apply for Another Appointment</a></p>
 </section>
 <section>
-<button id="logoutBtn">Log Out</button>
-<p><a href="/">Back to Homepage</a></p>
+<button id="logoutBtn">Sign Out</button>
+<p><a href="/">Back to Home</a></p>
 </section>
 </main>
 <script>
@@ -58,7 +78,7 @@ async function loadAccount(){
 try{
 const r=await fetch('/api/customer/me');
 const d=await r.json();
-if(!r.ok)throw new Error('Please log in to view your account.');
+if(!r.ok)throw new Error('Please sign in to view your account.');
 const c=d.customer;
 profile.textContent=c.fullName+' | '+c.email;
 profileForm.elements.fullName.value=c.fullName||'';
@@ -68,7 +88,7 @@ profileForm.hidden=false;
 await loadAppointments();
 }catch(e){
 profile.textContent=e.message;
-appointmentMsg.textContent='Appointments could not be displayed.';
+appointmentMsg.textContent='We couldn't load your appointments. Please try again.';
 }
 }
 
@@ -79,10 +99,10 @@ const d=await r.json();
 if(!r.ok)throw new Error(d.message||'Unable to load appointments.');
 appointments.replaceChildren();
 if(!d.appointments.length){
-appointmentMsg.textContent='No appointments are linked to this account yet.';
+appointmentMsg.textContent='You don't have any appointments yet.';
 return;
 }
-appointmentMsg.textContent='Total appointments: '+d.appointments.length;
+appointmentMsg.textContent='Total Appointments: '+d.appointments.length;
 for(const a of d.appointments){
 const item=document.createElement('div');
 item.className='item';
@@ -105,10 +125,10 @@ resultButton.textContent = "Preparing secure link...";
 try {
 const response = await fetch("/api/customer/appointments/" + encodeURIComponent(a.id) + "/result");
 const data = await response.json();
-if (!response.ok) throw new Error(data.message || "Hindi ma-access ang resulta.");
+if (!response.ok) throw new Error(data.message || "Unable to access the result.");
 window.location.assign(data.url);
 } catch (error) {
-alert(error.message || "Hindi ma-download ang resulta.");
+alert(error.message || "Unable to download the result.");
 resultButton.disabled = false;
 resultButton.textContent = "View / Download Result";
 }
@@ -126,7 +146,7 @@ appointments.appendChild(item);
 }
 profileForm.addEventListener('submit',async function(e){
 e.preventDefault();
-profileMsg.textContent='Saving...';
+profileMsg.textContent='Saving your changes...';
 try{
 const r=await fetch('/api/customer/profile',{
 method:'PUT',
@@ -139,7 +159,7 @@ address:profileForm.elements.address.value
 });
 const d=await r.json();
 if(!r.ok)throw new Error(d.message||'Unable to save your profile.');
-profileMsg.textContent='Profile saved successfully.';
+profileMsg.textContent='Your profile has been updated successfully.';
 await loadAccount();
 }catch(e){profileMsg.textContent=e.message;}
 });
@@ -148,7 +168,7 @@ document.getElementById('logoutBtn').addEventListener('click',async function(){
 try{
 await fetch('/api/customer/logout',{method:'POST'});
 location.href='/customer-login.html';
-}catch(e){profileMsg.textContent='Unable to log out. Please try again.';}
+}catch(e){profileMsg.textContent='Unable to sign out. Please try again.';}
 });
 
 loadAccount();

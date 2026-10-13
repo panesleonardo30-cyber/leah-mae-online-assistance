@@ -162,7 +162,7 @@
 
         <h2>Application Form</h2>
 
-        <form id="applicationForm">
+        <form id="applicationForm" style="display:none">
 
             <label>
                 Full Name <span class="required">*</span>
@@ -319,6 +319,16 @@
 
             
 const form = document.getElementById("applicationForm");
+form.style.display = "none";
+fetch("/api/customer/me", { credentials: "same-origin" })
+    .then(response => {
+        if (!response.ok) {
+            location.replace("/customer-login.html");
+            return;
+        }
+        form.style.display = "";
+    })
+    .catch(() => location.replace("/customer-login.html"));
 const result = document.getElementById("result");
 let submitting = false;
 let pendingApplicationKey = null;

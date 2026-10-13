@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Messages | Leah Mae Online Assistance</title>
+<style>
+:root{color-scheme:light;--green:#163a35;--green2:#24574d;--cream:#f7f5ef;--ink:#202d2a;--muted:#687873;--line:#e4e9e5}
+*{box-sizing:border-box}body{margin:0;background:var(--cream);color:var(--ink);font:16px system-ui,Arial,sans-serif;line-height:1.5}
+header{background:linear-gradient(135deg,#163a35,#28584d);color:white;padding:22px}
+header h1,header p{max-width:900px;margin:0 auto}header p{color:#d9e8e1;font-size:14px}
+main{max-width:900px;margin:22px auto;padding:0 14px 35px}
+section{background:white;border:1px solid var(--line);border-radius:16px;padding:18px;margin:14px 0}
+h2{font-size:19px;color:var(--green);margin:0 0 12px}
+button,a.link{display:inline-flex;align-items:center;justify-content:center;min-height:42px;padding:10px 14px;border:0;border-radius:9px;background:var(--green);color:white;text-decoration:none;font:inherit;font-weight:650;cursor:pointer}
+button:disabled{opacity:.55}input,textarea{width:100%;padding:12px;border:1px solid #d5ded8;border-radius:9px;font:inherit;margin:6px 0 12px}
+#chat{height:350px;overflow:auto;border:1px solid var(--line);border-radius:12px;padding:12px;background:#fafcf9}
+.bubble{max-width:88%;padding:10px 12px;margin:10px 0;border-radius:12px;background:#edf3ee;overflow-wrap:anywhere}
+.bubble.mine{margin-left:auto;background:#dcece3}.who,.muted{font-size:12px;color:var(--muted)}
+.file{padding:12px 0;border-bottom:1px solid var(--line);overflow-wrap:anywhere}
+#status,#fileStatus{color:var(--muted);font-size:14px}
+@media(max-width:480px){header{padding:18px}main{margin:12px auto}section{padding:14px}button,a.link{width:100%}}
+</style>
+</head>
+<body>
+<header><h1>Leah Mae Online Assistance</h1><p>Private Customer Messenger</p></header>
+<main>
+<section>
+<h2>Chat with Admin</h2>
+<p class="muted">Ang mga mensahe rito ay para lamang sa iyong account at sa admin.</p>
+<div id="chat" aria-live="polite">Loading messages...</div>
+<form id="sendForm">
+<label for="message">Your message</label>
+<textarea id="message" rows="3" maxlength="2000" required placeholder="Type your message..."></textarea>
+<button id="sendBtn" type="submit">Send Message</button>
+</form>
+<p id="status" role="status"></p>
+</section>
+<section>
+<h2>My Files</h2>
+<p class="muted">Mga dokumentong ipinadala ng admin sa iyong account.</p>
+<div id="files">Loading your files...</div>
+<p id="fileStatus" role="status"></p>
+</section>
+<section>
+<a class="link" href="/customer-account.html">Back to My Dashboard</a>
+</section>
+</main>
+<script>
+const chat=document.getElementById('chat');
+const statusEl=document.getElementById('status');
+const filesEl=document.getElementById('files');
+const fileStatus=document.getElementById('fileStatus');
+let loading=false;
+
+async function api(url,options={}){
+  const response=await fetch(url,{credentials:'same-origin',...options});
+  const data=await response.json().catch(()=>({message:'Unexpected server response.'}));
+  if(response.status===401){location.href='/customer-login.html';throw new Error('Please sign in again.');}
+  if(!response.ok)throw new Error(data.message||'Request failed.');
+  return data;
+}
+function addText(parent,tag,text,className){
+  const el=document.createElement(tag);el.textContent=text||'';if(className)el.className=className;parent.appendChild(el);return el;
+}
+async function loadMessages(){
+  if(loading)return;loading=true;
+  try{
+    const data=await api('/api/customer/messages');
+    chat.replaceChildren();
+    if(!data.messages.length)addText(chat,'p','No messages yet. You can send a message to the admin.');
+    for(const m of data.messages){
+      const bubble=document.createElement('div');
+      bubble.className='bubble'+(m.senderRole==='customer'?' mine':'');
+      addText(bubble,'div',m.senderRole==='customer'?'You':'Admin','who');
+      if(m.message)addText(bubble,'div',m.message);
+      if(m.hasFile){
+        const btn=addText(bubble,'button','Download '+(m.fileName||'file'));
+        btn.type='button';
+        btn.addEventListener('click',async()=>{
+          btn.disabled=true;
+          try{
+            const file=await api('/api/customer/files/'+encodeURIComponent(m.id)+'/download');
+            location.assign(file.url);
+          }catch(e){alert(e.message);}
+          finally{btn.disabled=false;}
+        });
+      }
+      addText(bubble,'div',m.createdAt?new Date(m.createdAt).toLocaleString():'','who');
+      chat.appendChild(bubble);
+    }
+    chat.scrollTop=chat.scrollHeight;
+  }catch(e){statusEl.textContent=e.message;}
+  finally{loading=false;}
+}
+async function loadFiles(){
+  try{
+    const data=await api('/api/customer/files');filesEl.replaceChildren();
+    if(!data.files.length){addText(filesEl,'p','No files have been sent to you yet.');return;}
+    for(const f of data.files){
+      const item=document.createElement('div');item.className='file';
+      addText(item,'strong',f.fileName||'Document');
+      if(f.message)addText(item,'p',f.message);
+      addText(item,'p',f.createdAt?new Date(f.createdAt).toLocaleString():'','muted');
+      const btn=addText(item,'button','Download File');btn.type='button';
+      btn.addEventListener('click',async()=>{
+        btn.disabled=true;
+        try{const d=await api('/api/customer/files/'+encodeURIComponent(f.id)+'/download');location.assign(d.url);}
+        catch(e){fileStatus.textContent=e.message;}
+        finally{btn.disabled=false;}
+      });
+      filesEl.appendChild(item);
+    }
+  }catch(e){fileStatus.textContent=e.message;}
+}
+document.getElementById('sendForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const field=document.getElementById('message'),btn=document.getElementById('sendBtn');
+  const message=field.value.trim();if(!message)return;
+  btn.disabled=true;statusEl.textContent='Sending...';
+  try{
+    await api('/api/customer/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message})});
+    field.value='';statusEl.textContent='Message sent.';await loadMessages();
+  }catch(err){statusEl.textContent=err.message;}
+  finally{btn.disabled=false;}
+});
+loadMessages();loadFiles();
+setInterval(()=>{loadMessages();loadFiles();},10000);
+</script>
+</body>
+</html>

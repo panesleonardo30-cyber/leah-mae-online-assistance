@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="fil">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Customer Account | Leah Mae</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f4f6fb;margin:0;color:#24304a}
+header{background:#243b70;color:white;padding:18px}
+main{max-width:760px;margin:20px auto;padding:16px}
+section{background:white;padding:18px;margin:14px 0;border-radius:12px}
+button{padding:11px 16px;border:0;border-radius:8px;background:#243b70;color:white}
+input{box-sizing:border-box;width:100%;padding:11px;margin:6px 0;border:1px solid #ccc;border-radius:7px}
+.item{border-bottom:1px solid #ddd;padding:12px 0}
+.muted{color:#667085}
+#msg{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<header>
+<h2>Leah Mae Online Assistance</h2>
+<p>Customer Dashboard</p>
+</header>
+<main>
+<section>
+<h3>My Profile</h3>
+<p id="profile">Loading profile...</p>
+<form id="profileForm" hidden>
+<label>Full Name</label>
+<input name="fullName" required>
+<label>Contact number</label>
+<input name="contact" required>
+<label>Address</label>
+<input name="address">
+<button type="submit">Save Profile</button>
+</form>
+<p id="profileMsg"></p>
+</section>
+<section>
+<h3>My Appointments</h3>
+<p id="appointmentMsg">Loading appointments...</p>
+<div id="appointments"></div>
+<p><a href="/application.html">Book a New Appointment</a></p>
+</section>
+<section>
+<button id="logoutBtn">Log Out</button>
+<p><a href="/">Back to Homepage</a></p>
+</section>
+</main>
+<script>
+const profile=document.getElementById('profile');
+const profileForm=document.getElementById('profileForm');
+const profileMsg=document.getElementById('profileMsg');
+const appointmentMsg=document.getElementById('appointmentMsg');
+const appointments=document.getElementById('appointments');
+
+async function loadAccount(){
+try{
+const r=await fetch('/api/customer/me');
+const d=await r.json();
+if(!r.ok)throw new Error('Please log in to view your account.');
+const c=d.customer;
+profile.textContent=c.fullName+' | '+c.email;
+profileForm.elements.fullName.value=c.fullName||'';
+profileForm.elements.contact.value=c.contact||'';
+profileForm.elements.address.value=c.address||'';
+profileForm.hidden=false;
+await loadAppointments();
+}catch(e){
+profile.textContent=e.message;
+appointmentMsg.textContent='Appointments could not be displayed.';
+}
+}
+
+async function loadAppointments(){
+try{
+const r=await fetch('/api/customer/appointments');
+const d=await r.json();
+if(!r.ok)throw new Error(d.message||'Unable to load appointments.');
+appointments.replaceChildren();
+if(!d.appointments.length){
+appointmentMsg.textContent='No appointments are linked to this account yet.';
+return;
+}
+appointmentMsg.textContent='Total appointments: '+d.appointments.length;
+for(const a of d.appointments){
+const item=document.createElement('div');
+item.className='item';
+const title=document.createElement('strong');
+title.textContent=a.service||'Appointment';
+item.appendChild(title);
+const detail=document.createElement('p');
+detail.textContent='Status: '+(a.status||'Pending')+
+' | Date: '+(a.preferredDate||'Not set')+
+' | Time: '+(a.preferredTime||'Not set');
+item.appendChild(detail);
+
+if (a.resultAvailable) {
+const resultButton = document.createElement("button");
+resultButton.type = "button";
+resultButton.textContent = "View / Download Result";
+resultButton.addEventListener("click", async function() {
+resultButton.disabled = true;
+resultButton.textContent = "Preparing secure link...";
+try {
+const response = await fetch("/api/customer/appointments/" + encodeURIComponent(a.id) + "/result");
+const data = await response.json();
+if (!response.ok) throw new Error(data.message || "Hindi ma-access ang resulta.");
+window.location.assign(data.url);
+} catch (error) {
+alert(error.message || "Hindi ma-download ang resulta.");
+resultButton.disabled = false;
+resultButton.textContent = "View / Download Result";
+}
+});
+item.appendChild(resultButton);
+const fileName = document.createElement("p");
+fileName.className = "muted";
+fileName.textContent = a.resultOriginalName || "Result file available";
+item.appendChild(fileName);
+}
+
+appointments.appendChild(item);
+}
+}catch(e){appointmentMsg.textContent=e.message;}
+}
+profileForm.addEventListener('submit',async function(e){
+e.preventDefault();
+profileMsg.textContent='Saving...';
+try{
+const r=await fetch('/api/customer/profile',{
+method:'PUT',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({
+fullName:profileForm.elements.fullName.value,
+contact:profileForm.elements.contact.value,
+address:profileForm.elements.address.value
+})
+});
+const d=await r.json();
+if(!r.ok)throw new Error(d.message||'Unable to save your profile.');
+profileMsg.textContent='Profile saved successfully.';
+await loadAccount();
+}catch(e){profileMsg.textContent=e.message;}
+});
+
+document.getElementById('logoutBtn').addEventListener('click',async function(){
+try{
+await fetch('/api/customer/logout',{method:'POST'});
+location.href='/customer-login.html';
+}catch(e){profileMsg.textContent='Unable to log out. Please try again.';}
+});
+
+loadAccount();
+</script>
+</body>
+</html>

@@ -3,9 +3,44 @@ const express = require("express");
 const path = require("path");
 
 const { Pool } = require("pg");
+const { createClient } = require("@supabase/supabase-js");
+const multer = require("multer");
+const createCustomerRoutes = require("./customer-routes");
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
+
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const STORAGE_BUCKET = process.env.SUPABASE_STORAGE_BUCKET || "appointment-results";
+
+const supabase = SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY
+    ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+        auth: {
+            persistSession: false,
+            autoRefreshToken: false
+        }
+    })
+    : null;
+
+const resultUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 10 * 1024 * 1024 },
+    fileFilter(req, file, callback) {
+        const extension = path.extname(file.originalname || "").toLowerCase();
+        const allowed = {
+            "application/pdf": [".pdf"],
+            "image/jpeg": [".jpg", ".jpeg"],
+            "image/png": [".png"]
+        };
+
+        if (!allowed[file.mimetype] || !allowed[file.mimetype].includes(extension)) {
+            return callback(new Error("PDF, JPG, o PNG lamang ang pinapayagan."));
+        }
+
+        callback(null, true);
+    }
+});
 
 if (!process.env.DATABASE_URL) {
     console.error("DATABASE_URL is missing. Configure it in Render Environment.");
@@ -15,6 +50,10 @@ if (!process.env.DATABASE_URL) {
 const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
     ssl: { rejectUnauthorized: false }
+});
+
+pool.on("error", (err) => {
+    console.error("Database idle connection error:", err.code || err.message);
 });
 
 function initializeDatabase(callback) {
@@ -45,11 +84,21 @@ function initializeDatabase(callback) {
             ["preferredDate", "TEXT"],
             ["preferredTime", "TEXT"],
             ["message", "TEXT"],
+            ["emergencyContactName", "TEXT"],
+            ["emergencyContactRelationship", "TEXT"],
+            ["emergencyContactNumber", "TEXT"],
+            ["declarationAccuracy", "BOOLEAN DEFAULT FALSE"],
+            ["privacyConsent", "BOOLEAN DEFAULT FALSE"],
+            ["privacyConsentAt", "TIMESTAMPTZ"],
             ["paymentMethod", "TEXT"],
             ["paymentTiming", "TEXT"],
             ["status", "TEXT DEFAULT 'Pending'"],
             ["requestKey", "TEXT"],
-            ["requestHash", "TEXT"]
+            ["requestHash", "TEXT"],
+            ["result_storage_path", "TEXT"],
+            ["result_original_name", "TEXT"],
+            ["result_content_type", "TEXT"],
+            ["result_uploaded_at", "TIMESTAMPTZ"]
         ];
 
         for (const [name, definition] of columns) {
@@ -69,6 +118,11 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Website files
+const customerRoutes = createCustomerRoutes(pool, {
+    supabase,
+    storageBucket: STORAGE_BUCKET
+});
+app.use(customerRoutes.router);
 app.use(express.static(path.join(__dirname, "public")));
 
 // Admin login and session protection
@@ -151,9 +205,19 @@ app.post("/api/appointments", async (req, res) => {
     try {
         const {
             fullName, service, contact, email, address,
-            preferredDate, preferredTime, message, paymentMethod
+            preferredDate, preferredTime, message, paymentMethod,
+          emergencyContactName, emergencyContactRelationship,
+          emergencyContactNumber, declarationAccuracy, privacyConsent
         } = req.body;
 
+        const isChecked = value => value === true ||
+            ["true", "on", "yes", "1"].includes(String(value || "").toLowerCase());
+        const accuracyConfirmed = isChecked(declarationAccuracy);
+        const privacyConfirmed = isChecked(privacyConsent);
+        if (!accuracyConfirmed || !privacyConfirmed) {
+            return res.status(400).json({ success: false,
+                message: "Please confirm the declaration and privacy notice." });
+        }
         if (!fullName || !service || !contact || !paymentMethod) {
             return res.status(400).json({
                 success: false,
@@ -186,6 +250,11 @@ app.post("/api/appointments", async (req, res) => {
             preferredDate: preferredDate || "",
             preferredTime: preferredTime || "",
             message: message || "",
+            emergencyContactName: emergencyContactName || "",
+            emergencyContactRelationship: emergencyContactRelationship || "",
+            emergencyContactNumber: emergencyContactNumber || "",
+            declarationAccuracy: accuracyConfirmed,
+            privacyConsent: privacyConfirmed,
             paymentMethod,
             paymentTiming: "After Approval"
         };
@@ -194,24 +263,31 @@ app.post("/api/appointments", async (req, res) => {
             .update(JSON.stringify(payload)).digest("hex");
 
         try {
+            const customer = await customerRoutes.getCustomerFromRequest(req);
             const result = await pool.query(`
                 INSERT INTO public.appointments (
                     "fullName", service, contact, email, address,
                     "preferredDate", "preferredTime", message,
+                    "emergencyContactName", "emergencyContactRelationship",
+                    "emergencyContactNumber", "declarationAccuracy",
+                    "privacyConsent", "privacyConsentAt",
                     "paymentMethod", "paymentTiming", status,
-                    "requestKey", "requestHash"
+                    customer_id, "requestKey", "requestHash"
                 )
                 VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                    'Pending', $11, $12
+                    $1, $2, $3, $4, $5, $6, $7, $8,
+                    $9, $10, $11, $12, $13, NOW(),
+                    $14, $15, 'Pending', $16, $17, $18
                 )
                 RETURNING id
             `, [
                 payload.fullName, payload.service, payload.contact,
                 payload.email, payload.address, payload.preferredDate,
                 payload.preferredTime, payload.message,
-                payload.paymentMethod, payload.paymentTiming,
-                requestKey, requestHash
+                payload.emergencyContactName, payload.emergencyContactRelationship,
+                payload.emergencyContactNumber, payload.declarationAccuracy,
+                payload.privacyConsent, payload.paymentMethod,
+                payload.paymentTiming, customer ? customer.id : null, requestKey, requestHash
             ]);
 
             return res.json({
@@ -254,6 +330,145 @@ app.post("/api/appointments", async (req, res) => {
     }
 });
 
+
+
+// Upload an appointment result: admin-only, private Supabase Storage.
+app.post(
+    "/api/appointments/:id/result",
+    requireAdmin,
+    (req, res, next) => {
+        resultUpload.single("file")(req, res, (err) => {
+            if (err) {
+                return res.status(400).json({
+                    success: false,
+                    message: err.message || "Hindi tinanggap ang file."
+                });
+            }
+            next();
+        });
+    },
+    async (req, res) => {
+        let storagePath;
+
+        try {
+            if (!supabase) {
+                return res.status(503).json({
+                    success: false,
+                    message: "Hindi pa naka-configure ang private storage sa server."
+                });
+            }
+
+            if (!/^\d+$/.test(req.params.id)) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Invalid appointment ID."
+                });
+            }
+
+            if (!req.file) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Pumili muna ng PDF, JPG, o PNG file."
+                });
+            }
+
+            // Check file signature before private storage upload.
+            const fileBuffer = req.file.buffer;
+            const fileMime = req.file.mimetype;
+
+            const isPdf =
+                fileBuffer.subarray(0, 1024)
+                    .toString("latin1").includes("%PDF-");
+
+            const isJpeg =
+                fileBuffer.length >= 3 &&
+                fileBuffer[0] === 0xff &&
+                fileBuffer[1] === 0xd8 &&
+                fileBuffer[2] === 0xff;
+
+            const isPng =
+                fileBuffer.length >= 8 &&
+                fileBuffer.subarray(0, 8).equals(
+                    Buffer.from([
+                        0x89, 0x50, 0x4e, 0x47,
+                        0x0d, 0x0a, 0x1a, 0x0a
+                    ])
+                );
+
+            const signatureMatches =
+                (fileMime === "application/pdf" && isPdf) ||
+                (fileMime === "image/jpeg" && isJpeg) ||
+                (fileMime === "image/png" && isPng);
+
+            if (!signatureMatches) {
+                return res.status(400).json({
+                    success: false,
+                    message: "Hindi tugma ang file content sa PDF, JPG, o PNG format."
+                });
+            }
+
+            const appointment = await pool.query(
+                "SELECT id FROM public.appointments WHERE id = $1",
+                [req.params.id]
+            );
+
+            if (!appointment.rowCount) {
+                return res.status(404).json({
+                    success: false,
+                    message: "Hindi makita ang appointment."
+                });
+            }
+
+            const extension = path.extname(req.file.originalname).toLowerCase();
+            const baseName = path.basename(req.file.originalname, extension)
+                .replace(/[^a-zA-Z0-9_-]/g, "_")
+                .slice(0, 80) || "result";
+
+            storagePath =
+                `${req.params.id}/${Date.now()}-${crypto.randomUUID()}-${baseName}${extension}`;
+
+            const uploaded = await supabase.storage
+                .from(STORAGE_BUCKET)
+                .upload(storagePath, req.file.buffer, {
+                    contentType: req.file.mimetype,
+                    upsert: false
+                });
+
+            if (uploaded.error) throw uploaded.error;
+
+            try {
+                await pool.query(
+                    `UPDATE public.appointments
+                     SET result_storage_path = $1,
+                         result_original_name = $2,
+                         result_content_type = $3,
+                         result_uploaded_at = NOW()
+                     WHERE id = $4`,
+                    [
+                        storagePath,
+                        path.basename(req.file.originalname).slice(0, 200),
+                        req.file.mimetype,
+                        req.params.id
+                    ]
+                );
+            } catch (dbError) {
+                await supabase.storage.from(STORAGE_BUCKET).remove([storagePath]);
+                throw dbError;
+            }
+
+            res.json({
+                success: true,
+                message: "Na-upload ang resulta sa private storage."
+            });
+        } catch (err) {
+            console.error("Result upload error:", err.message);
+            res.status(500).json({
+                success: false,
+                message: "Hindi na-upload ang resulta. Suriin ang server configuration."
+            });
+        }
+    }
+);
 
 // READ - View applications
 app.get("/api/appointments", requireAdmin, async (req, res) => {
@@ -353,10 +568,18 @@ app.delete("/api/appointments/:id", requireAdmin, async (req, res) => {
 });
 
 // Start server only after database migrations finish
-initializeDatabase((err) => {
+initializeDatabase(async (err) => {
     if (err) {
         console.error("Database initialization failed:", err.message);
         process.exit(1);
+    }
+
+    try {
+        await customerRoutes.initializeCustomerTables();
+    } catch (customerDbError) {
+        console.error("Customer database initialization failed:", customerDbError.message);
+        process.exit(1);
+        return;
     }
 
     app.listen(PORT, () => {

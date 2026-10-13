@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="fil">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Customer Registration | Leah Mae</title>
+<style>
+body{font-family:Arial;background:#f4f6fb;margin:0;padding:20px}
+main{max-width:430px;margin:25px auto;background:white;padding:22px;border-radius:14px}
+input,button{box-sizing:border-box;width:100%;padding:12px;margin:7px 0;border-radius:8px}
+input{border:1px solid #ccc}
+button{background:#243b70;color:white;border:0;font-weight:bold}
+#msg{overflow-wrap:anywhere}
+</style>
+</head>
+<body>
+<main>
+<h1>Gumawa ng Account</h1>
+<p>Ilagay ang iyong impormasyon.</p>
+<form id="registerForm">
+<input name="fullName" placeholder="Buong pangalan" required>
+<input name="contact" placeholder="Contact number" required>
+<input name="address" placeholder="Kumpletong address (optional)">
+<input name="email" type="email" placeholder="Email address" required>
+<input name="password" type="password" minlength="10" placeholder="Password (10 character pataas)" required>
+<button type="submit">Gumawa ng Account</button>
+</form>
+<p id="msg"></p>
+<p>May account na? <a href="/customer-login.html">Mag-login</a></p>
+</main>
+<script>
+document.getElementById('registerForm').addEventListener('submit',async function(e){
+e.preventDefault();
+const msg=document.getElementById('msg');
+const f=new FormData(this);
+msg.textContent='Ginagawa ang account...';
+try{
+const r=await fetch('/api/customer/register',{
+method:'POST',
+headers:{'Content-Type':'application/json'},
+body:JSON.stringify({
+fullName:f.get('fullName'),
+contact:f.get('contact'),
+address:f.get('address'),
+email:f.get('email'),
+password:f.get('password')
+})
+});
+const d=await r.json();
+if(!r.ok)throw new Error(d.message||'Hindi nagawa ang account.');
+msg.textContent='Matagumpay! Binubuksan ang iyong account...';
+location.href='/customer-account.html';
+}catch(err){msg.textContent=err.message;}
+});
+</script>
+</body>
+</html>

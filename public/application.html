@@ -116,6 +116,31 @@
     <meta name="theme-color" content="#1d4ed8">
     <link rel="manifest" href="/manifest.webmanifest">
 
+
+<style>
+.customer-nav {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 14px;
+  background: #ffffff;
+}
+.customer-nav a {
+  display: inline-block;
+  padding: 10px 14px;
+  border: 1px solid #2563eb;
+  border-radius: 8px;
+  color: #1d4ed8;
+  text-decoration: none;
+  font-weight: 700;
+}
+.customer-nav a:focus,
+.customer-nav a:hover {
+  background: #eff6ff;
+}
+</style>
+
 </head>
 
 <body>
@@ -124,6 +149,12 @@
     <h1>Leah Mae Online Assistance</h1>
     <p>Appointment & Assistance Application</p>
 </header>
+
+<nav aria-label="Customer account" class="customer-nav">
+  <a href="/customer-login.html">Customer Login</a>
+  <a href="/customer-register.html">Gumawa ng Account</a>
+</nav>
+
 
 <div class="container">
 
@@ -240,7 +271,29 @@
                 name="preferredTime"
             >
 
-            <label>
+
+<h3>Emergency Contact (Optional)</h3>
+<label for="emergencyContactName">Emergency Contact Name</label>
+<input type="text" id="emergencyContactName" name="emergencyContactName" autocomplete="name">
+<label for="emergencyContactRelationship">Relationship to Applicant</label>
+<input type="text" id="emergencyContactRelationship" name="emergencyContactRelationship">
+<label for="emergencyContactNumber">Emergency Contact Number</label>
+<input type="tel" id="emergencyContactNumber" name="emergencyContactNumber" autocomplete="tel">
+
+<h3>Client Declaration and Privacy</h3>
+<details>
+  <summary>Privacy Notice</summary>
+  <p>We use the information you provide to process your application, arrange assistance, contact you about your request, and maintain appointment records. Access should be limited to authorized personnel. Information should be retained only as needed for these purposes or as required by law. You may request access or correction through the service's official contact channel.</p>
+</details>
+<label>
+  <input type="checkbox" name="declarationAccuracy" value="true" required>
+  I certify that the information I have provided is true and accurate.
+</label>
+<label>
+  <input type="checkbox" name="privacyConsent" value="true" required>
+  I have read and agree to the Privacy Notice regarding the processing of my application.
+</label>
+<label>
                 Additional Message
             </label>
 
@@ -345,6 +398,166 @@ if ("serviceWorker" in navigator) {
       .catch((error) => console.error("Service worker registration failed:", error));
   });
 }
+</script>
+
+
+<script id="professional-application-review">
+(function () {
+  const forms = [
+    document.getElementById("appointmentForm"),
+    document.getElementById("applicationForm")
+  ].filter(Boolean);
+
+  if (!forms.length) return;
+
+  const labels = {
+    fullName: "Full Name",
+    service: "Requested Service",
+    contact: "Contact Number",
+    email: "Email Address",
+    address: "Complete Address",
+    preferredDate: "Preferred Date",
+    preferredTime: "Preferred Time",
+    paymentMethod: "Method of Payment",
+    message: "Additional Message",
+    emergencyContactName: "Emergency Contact Name",
+    emergencyContactRelationship: "Relationship to Applicant",
+    emergencyContactNumber: "Emergency Contact Number",
+    declarationAccuracy: "Accuracy Declaration",
+    privacyConsent: "Privacy Notice Consent"
+  };
+
+  function showReview(form, continueSubmit) {
+    const overlay = document.createElement("div");
+    overlay.style.cssText =
+      "position:fixed;inset:0;z-index:99999;background:#0009;overflow:auto;padding:16px;box-sizing:border-box;";
+
+    const panel = document.createElement("section");
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+    panel.setAttribute("aria-labelledby", "applicationReviewTitle");
+    panel.style.cssText =
+      "max-width:720px;margin:20px auto;background:#fff;color:#202b38;" +
+      "border-radius:16px;padding:22px;box-shadow:0 12px 40px #0004;" +
+      "font-family:Arial,sans-serif;";
+
+    const title = document.createElement("h2");
+    title.id = "applicationReviewTitle";
+    title.textContent = "Review Your Application";
+    title.style.cssText = "color:#173b63;margin-top:0;font-size:24px;";
+    panel.appendChild(title);
+
+    const intro = document.createElement("p");
+    intro.textContent =
+      "Please review all details carefully. Choose Edit Details to make changes before submitting.";
+    panel.appendChild(intro);
+
+    const list = document.createElement("div");
+    list.style.cssText = "display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;";
+
+    const names = [
+      "fullName", "service", "contact", "email", "address",
+      "preferredDate", "preferredTime", "paymentMethod", "message",
+      "emergencyContactName", "emergencyContactRelationship",
+      "emergencyContactNumber", "declarationAccuracy", "privacyConsent"
+    ];
+
+    for (const name of names) {
+      const field = form.elements.namedItem(name);
+      let value = field && field.type === "checkbox" ? (field.checked ? "Confirmed" : "Not confirmed") : field && typeof field.value === "string" ? field.value.trim() : "";
+
+      if (name === "preferredTime") {
+        const display = document.getElementById("preferredTimeDisplay");
+        if (display && display.value.trim()) value = display.value.trim();
+      }
+
+      if (name === "service" && field && field.selectedIndex >= 0) {
+        value = field.options[field.selectedIndex].textContent.trim();
+      }
+
+      const item = document.createElement("div");
+      item.style.cssText =
+        "padding:12px;border:1px solid #dbe3ed;border-radius:10px;" +
+        "background:#f7f9fc;overflow-wrap:anywhere;";
+
+      const label = document.createElement("div");
+      label.textContent = labels[name];
+      label.style.cssText = "font-size:12px;color:#596b80;font-weight:bold;margin-bottom:5px;";
+
+      const detail = document.createElement("div");
+      detail.textContent = value || "Not provided";
+      detail.style.cssText = "font-size:15px;white-space:pre-wrap;";
+
+      item.appendChild(label);
+      item.appendChild(detail);
+      list.appendChild(item);
+    }
+
+    const payment = document.createElement("div");
+    payment.style.cssText =
+      "margin-top:12px;padding:12px;background:#edf4fb;border-radius:10px;";
+    payment.textContent = "Payment Timing: After Approval";
+    panel.appendChild(list);
+    panel.appendChild(payment);
+
+    const buttons = document.createElement("div");
+    buttons.style.cssText =
+      "display:flex;flex-wrap:wrap;gap:10px;margin-top:20px;";
+
+    function makeButton(text, background) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = text;
+      button.style.cssText =
+        "flex:1;min-width:150px;padding:13px;border:0;border-radius:9px;" +
+        "font-size:15px;font-weight:bold;color:white;background:" + background + ";";
+      return button;
+    }
+
+    const edit = makeButton("Edit Details", "#596b80");
+    edit.addEventListener("click", () => {
+      overlay.remove();
+      const first = form.querySelector("input:not([type=hidden]),select,textarea");
+      if (first) first.focus();
+    });
+
+    const submit = makeButton("Confirm & Submit", "#173b63");
+    submit.addEventListener("click", () => {
+      submit.disabled = true;
+      submit.textContent = "Submitting...";
+      overlay.remove();
+      continueSubmit();
+    });
+
+    buttons.appendChild(edit);
+    buttons.appendChild(submit);
+    panel.appendChild(buttons);
+    overlay.appendChild(panel);
+    document.body.appendChild(overlay);
+    edit.focus();
+  }
+
+  for (const form of forms) {
+    let confirmed = false;
+
+    form.addEventListener("submit", function (event) {
+      if (confirmed) {
+        confirmed = false;
+        return;
+      }
+
+      event.preventDefault();
+      event.stopImmediatePropagation();
+
+      if (!form.reportValidity()) return;
+
+      showReview(form, function () {
+        confirmed = true;
+        form.requestSubmit();
+      });
+    }, true);
+  }
+})();
 </script>
 
 </body>

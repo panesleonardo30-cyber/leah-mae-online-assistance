@@ -353,10 +353,24 @@ async function loadAppointments() {
                         ${escapeHtml(app.preferredTime || "Not provided")}
                     </p>
 
-                    <p>
-                        <strong>Message:</strong>
+                    <p><strong>Emergency Contact Name:</strong> ${escapeHtml(app.emergencyContactName || "Not provided")}</p>
+                    <p><strong>Relationship to Applicant:</strong> ${escapeHtml(app.emergencyContactRelationship || "Not provided")}</p>
+                    <p><strong>Emergency Contact Number:</strong> ${escapeHtml(app.emergencyContactNumber || "Not provided")}</p>
+                    <p><strong>Accuracy Declaration:</strong> ${app.declarationAccuracy === true ? "Confirmed" : "Not confirmed"}</p>
+                    <p><strong>Privacy Notice Consent:</strong> ${app.privacyConsent === true ? "Confirmed" : "Not confirmed"}</p>
+                    
                         ${escapeHtml(app.message || "None")}
                     </p>
+                    <div class="result-upload">
+                        <label for="result-file-${app.id}">Upload Result (PDF/JPG/PNG, max 10 MB)</label>
+                        <input type="file" id="result-file-${app.id}"
+                               accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png">
+                        <button type="button" onclick="uploadResult(${app.id})">Upload Result</button>
+                        <p>${app.result_original_name
+                            ? "Uploaded: " + escapeHtml(app.result_original_name)
+                            : "No result uploaded yet."}</p>
+                    </div>
+
 
                     <p>
                         <strong>Status:</strong>
@@ -427,6 +441,36 @@ function updateStats(appointments) {
     document.getElementById("approvedCount").textContent = approved;
 }
 
+
+async function uploadResult(id) {
+    const input = document.getElementById("result-file-" + id);
+    if (!input || !input.files || !input.files.length) {
+        alert("Pumili muna ng PDF, JPG, o PNG file.");
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", input.files[0]);
+
+    try {
+        const response = await fetch("/api/appointments/" + id + "/result", {
+            method: "POST",
+            body: formData
+        });
+        const result = await response.json();
+
+        if (!response.ok) {
+            alert(result.message || "Hindi na-upload ang resulta.");
+            return;
+        }
+
+        alert(result.message || "Upload successful.");
+        await loadAppointments();
+    } catch (error) {
+        console.error(error);
+        alert("Hindi ma-upload ang resulta. Pakisubukang muli.");
+    }
+}
 
 async function updateStatus(id, newStatus) {
 

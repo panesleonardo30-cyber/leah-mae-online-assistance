@@ -44,6 +44,18 @@ section>p:last-child{margin-bottom:0}
 <section>
 <h3>My Profile</h3>
 <p id="profile">Loading your profile...</p>
+<div>
+<img id="avatarPreview" alt="Customer profile picture"
+     hidden style="width:112px;height:112px;object-fit:cover;
+     border-radius:50%;border:3px solid var(--line);margin:8px 0">
+<form id="avatarForm" hidden>
+<label for="avatarFile">Profile Picture (JPG or PNG, maximum 3 MB)</label>
+<input id="avatarFile" name="avatar" type="file"
+       accept="image/jpeg,image/png" required>
+<button type="submit">Upload Profile Picture</button>
+</form>
+<p id="avatarMsg" aria-live="polite"></p>
+</div>
 <form id="profileForm" hidden>
 <label>Full Name</label>
 <input name="fullName" required>
@@ -57,6 +69,7 @@ section>p:last-child{margin-bottom:0}
 </section>
 <section>
 <p><a class="primary-link" href="/customer-messages.html">Open Private Messenger & My Files</a></p>
+<p><a class="primary-link" href="/customer-newsfeed.html">📰 Open Customer Newsfeed</a></p>
 <h3>My Appointments</h3>
 <p id="appointmentMsg">Loading your appointments...</p>
 <div id="appointments"></div>
@@ -69,6 +82,9 @@ section>p:last-child{margin-bottom:0}
 </main>
 <script>
 const profile=document.getElementById('profile');
+const avatarPreview=document.getElementById('avatarPreview');
+const avatarForm=document.getElementById('avatarForm');
+const avatarMsg=document.getElementById('avatarMsg');
 const profileForm=document.getElementById('profileForm');
 const profileMsg=document.getElementById('profileMsg');
 const appointmentMsg=document.getElementById('appointmentMsg');
@@ -80,6 +96,10 @@ const r=await fetch('/api/customer/me');
 const d=await r.json();
 if(!r.ok)throw new Error('Please sign in to view your account.');
 const c=d.customer;
+avatarPreview.hidden = !c.avatarUrl;
+if (c.avatarUrl) avatarPreview.src = c.avatarUrl;
+else avatarPreview.removeAttribute('src');
+avatarForm.hidden = false;
 profile.textContent=c.fullName+' | '+c.email;
 profileForm.elements.fullName.value=c.fullName||'';
 profileForm.elements.contact.value=c.contact||'';
@@ -88,7 +108,7 @@ profileForm.hidden=false;
 await loadAppointments();
 }catch(e){
 profile.textContent=e.message;
-appointmentMsg.textContent='We couldn't load your appointments. Please try again.';
+appointmentMsg.textContent="We couldn't load your appointments. Please try again.";
 }
 }
 
@@ -99,7 +119,7 @@ const d=await r.json();
 if(!r.ok)throw new Error(d.message||'Unable to load appointments.');
 appointments.replaceChildren();
 if(!d.appointments.length){
-appointmentMsg.textContent='You don't have any appointments yet.';
+appointmentMsg.textContent="You don't have any appointments yet.";
 return;
 }
 appointmentMsg.textContent='Total Appointments: '+d.appointments.length;
@@ -144,6 +164,41 @@ appointments.appendChild(item);
 }
 }catch(e){appointmentMsg.textContent=e.message;}
 }
+avatarForm.addEventListener('submit', async function(e) {
+e.preventDefault();
+const button = avatarForm.querySelector('button[type="submit"]');
+button.disabled = true;
+avatarMsg.textContent = 'Uploading profile picture...';
+
+try {
+const fileInput = document.getElementById('avatarFile');
+if (!fileInput.files.length) {
+throw new Error('Please choose a JPG or PNG image.');
+}
+const formData = new FormData();
+formData.append('avatar', fileInput.files[0]);
+
+const response = await fetch('/api/customer/avatar', {
+method: 'POST',
+body: formData
+});
+const data = await response.json();
+if (!response.ok) {
+throw new Error(data.message || 'Unable to upload profile picture.');
+}
+
+await loadAccount();
+avatarMsg.textContent = avatarPreview.hidden
+  ? 'Picture uploaded, but its preview could not be loaded. Please refresh.'
+  : 'Profile picture updated successfully.';
+avatarForm.reset();
+} catch (error) {
+avatarMsg.textContent = error.message || 'Unable to upload profile picture.';
+} finally {
+button.disabled = false;
+}
+});
+
 profileForm.addEventListener('submit',async function(e){
 e.preventDefault();
 profileMsg.textContent='Saving your changes...';

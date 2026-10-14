@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#5635a5">
+<title>Newsfeed | Leah Mae Online Assistance</title>
+<style>
+:root {
+  --purple: #5635a5;
+  --purple-dark: #39216f;
+  --pink: #f7eaff;
+  --background: #f5f3fa;
+  --text: #29243a;
+  --muted: #716b80;
+  --border: #e7e1f0;
+  --white: #fff;
+  --green: #18794e;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--text);
+  background: var(--background);
+}
+button, textarea { font: inherit; }
+button, a { -webkit-tap-highlight-color: transparent; }
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: var(--white);
+  border-bottom: 1px solid var(--border);
+  padding: 13px 16px;
+}
+.topbar-inner {
+  max-width: 1000px;
+  margin: auto;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.brand {
+  color: var(--purple-dark);
+  font-weight: 850;
+  font-size: 16px;
+}
+.brand small {
+  display: block;
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 11px;
+}
+.top-link {
+  text-decoration: none;
+  color: var(--purple);
+  font-size: 13px;
+  font-weight: 750;
+}
+.layout {
+  max-width: 1000px;
+  padding: 20px 14px 100px;
+  margin: auto;
+  display: grid;
+  grid-template-columns: 245px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: 17px;
+  padding: 17px;
+  margin-bottom: 15px;
+  box-shadow: 0 4px 15px rgba(49, 30, 88, .035);
+}
+.welcome {
+  color: white;
+  background: linear-gradient(135deg, #5635a5, #8b58c9);
+  border: 0;
+}
+.welcome h1 { font-size: 23px; margin: 0 0 8px; }
+.welcome p { margin: 0; font-size: 13px; line-height: 1.6; }
+.section-title { margin: 0 0 12px; font-size: 17px; }
+.quick-links { display: grid; gap: 9px; }
+.quick-links a, .button {
+  display: block;
+  width: 100%;
+  text-align: center;
+  text-decoration: none;
+  border: 0;
+  border-radius: 11px;
+  padding: 12px 10px;
+  font-weight: 750;
+  font-size: 13px;
+  cursor: pointer;
+}
+.primary { background: var(--purple); color: white; }
+.secondary { background: var(--pink); color: var(--purple-dark); }
+.neutral { background: #f1eff6; color: var(--text); }
+.danger { background: #fff0f0; color: #a32626; }
+.hint { color: var(--muted); font-size: 12px; line-height: 1.6; }
+textarea {
+  width: 100%;
+  min-height: 105px;
+  resize: vertical;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  color: var(--text);
+  background: #fff;
+  outline-color: var(--purple);
+}
+.form-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+}
+.counter { color: var(--muted); font-size: 12px; }
+.form-footer button { width: auto; min-width: 125px; }
+.status {
+  margin: 10px 0 0;
+  font-size: 13px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.status.error { color: #a32626; }
+.status.success { color: var(--green); }
+.post-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.avatar {
+  width: 43px;
+  height: 43px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  color: white;
+  font-weight: 850;
+  background: var(--purple);
+}
+.post-name { font-weight: 800; font-size: 14px; overflow-wrap: anywhere; }
+.post-date { font-size: 11px; color: var(--muted); margin-top: 3px; }
+.badge {
+  display: inline-block;
+  border-radius: 30px;
+  padding: 4px 8px;
+  margin-top: 5px;
+  font-size: 10px;
+  font-weight: 850;
+  background: #eee6ff;
+  color: var(--purple-dark);
+}
+.badge.official { background: #e1f5e9; color: #17683f; }
+.post-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.65;
+  font-size: 14px;
+}
+.post-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 13px;
+}
+.post-actions button {
+  width: auto;
+  padding: 8px 12px;
+}
+.empty { text-align: center; padding: 25px 10px; color: var(--muted); }
+.loading { color: var(--muted); font-size: 13px; }
+footer { text-align: center; color: var(--muted); font-size: 11px; padding: 15px; }
+.mobile-nav { display: none; }
+@media (max-width: 700px) {
+  .layout { display: block; padding: 14px 11px 95px; }
+  .desktop-sidebar { display: none; }
+  .welcome h1 { font-size: 21px; }
+  .card { padding: 15px; border-radius: 15px; }
+  .mobile-nav {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 7px;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 10;
+    background: white;
+    border-top: 1px solid var(--border);
+    padding: 9px 8px calc(9px + env(safe-area-inset-bottom));
+  }
+  .mobile-nav a {
+    text-align: center;
+    text-decoration: none;
+    font-size: 11px;
+    font-weight: 800;
+    color: var(--purple-dark);
+    padding: 8px 2px;
+    border-radius: 9px;
+    background: var(--pink);
+  }
+}
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      LEAH MAE
+      <small>ONLINE ASSISTANCE</small>
+    </div>
+    <a class="top-link" href="/customer-account.html">My Account ↗</a>
+  </div>
+</header>
+
+<div class="layout">
+  <aside class="desktop-sidebar">
+    <section class="card welcome">
+      <h1>Welcome! 💜</h1>
+      <p>Stay updated with official announcements and posts from our customer community.</p>
+    </section>
+
+    <section class="card">
+      <h2 class="section-title">Quick Links</h2>
+      <div class="quick-links">
+        <a class="primary" href="/application.html">📅 BOOK APPOINTMENT</a>
+        <a class="secondary" href="/customer-account.html">👤 MY ACCOUNT</a>
+        <a class="secondary" href="/customer-messages.html">💬 OPEN MESSENGER</a>
+        <a class="neutral" href="/">⌂ BACK TO HOME</a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2 class="section-title">Community Reminder</h2>
+      <p class="hint">
+        Huwag mag-post ng password, OTP, government ID numbers,
+        private documents, o iba pang sensitibong personal na impormasyon.
+      </p>
+    </section>
+  </aside>
+
+  <main>
+    <section class="card welcome">
+      <h1>Newsfeed 📰</h1>
+      <p>Official announcements, service updates, at mga post ng customer sa isang lugar.</p>
+    </section>
+
+    <section class="card">
+      <h2 class="section-title">What's on your mind?</h2>
+      <form id="postForm">
+        <textarea
+          id="postContent"
+          maxlength="2000"
+          placeholder="Magbahagi ng update o mensahe sa community..."
+          required
+        ></textarea>
+        <div class="form-footer">
+          <span class="counter" id="counter">0 / 2000</span>
+          <button class="button primary" id="publishButton" type="submit">Publish Post</button>
+        </div>
+        <p class="hint">Plain text posts lamang. Huwag ilagay ang password, OTP, o sensitibong detalye.</p>
+        <p id="formStatus" class="status" role="status" aria-live="polite"></p>
+      </form>
+    </section>
+
+    <section aria-labelledby="feedTitle">
+      <h2 class="section-title" id="feedTitle">Latest Posts</h2>
+      <p id="feedStatus" class="loading" role="status" aria-live="polite">Loading Newsfeed...</p>
+      <div id="feed"></div>
+      <button id="loadMore" class="button neutral" type="button" hidden>Refresh Newsfeed</button>
+    </section>
+  </main>
+</div>
+
+<nav class="mobile-nav" aria-label="Quick navigation">
+  <a href="/application.html">📅 Appointment</a>
+  <a href="/customer-messages.html">💬 Messenger</a>
+  <a href="/customer-account.html">👤 Account</a>
+</nav>
+
+<footer>Leah Mae Online Assistance · Customer Community</footer>
+
+<script>
+"use strict";
+
+const feed = document.getElementById("feed");
+const feedStatus = document.getElementById("feedStatus");
+const form = document.getElementById("postForm");
+const postContent = document.getElementById("postContent");
+const formStatus = document.getElementById("formStatus");
+const publishButton = document.getElementById("publishButton");
+const counter = document.getElementById("counter");
+const loadMore = document.getElementById("loadMore");
+
+function showFormStatus(message, isError = false) {
+  formStatus.textContent = message;
+  formStatus.className = "status " + (isError ? "error" : "success");
+}
+
+function formatDate(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Recently";
+  return date.toLocaleString("en-PH", {
+    dateStyle: "medium",
+    timeStyle: "short"
+  });
+}
+
+async function api(url, options = {}) {
+  const response = await fetch(url, {
+    credentials: "same-origin",
+    ...options,
+    headers: {
+      ...(options.body ? { "Content-Type": "application/json" } : {}),
+      ...(options.headers || {})
+    }
+  });
+
+  let data = {};
+  try {
+    data = await response.json();
+  } catch (_) {}
+
+  if (response.status === 401) {
+    window.location.href = "/customer-login.html";
+    throw new Error("Mag-login muna sa customer account.");
+  }
+
+  if (!response.ok || data.success === false) {
+    throw new Error(data.message || "May naganap na error. Subukan ulit.");
+  }
+
+  return data;
+}
+
+function createPostCard(post) {
+  const card = document.createElement("article");
+  card.className = "card";
+
+  const head = document.createElement("div");
+  head.className = "post-head";
+
+  const avatar = document.createElement("div");
+  avatar.className = "avatar";
+  avatar.setAttribute("aria-hidden", "true");
+  avatar.textContent = post.authorRole === "admin"
+    ? "LM"
+    : String(post.authorName || "C").trim().slice(0, 1).toUpperCase();
+
+  const details = document.createElement("div");
+  details.style.minWidth = "0";
+
+  const name = document.createElement("div");
+  name.className = "post-name";
+  name.textContent = post.authorRole === "admin"
+    ? "Leah Mae Official"
+    : (post.authorName || "Customer");
+
+  const date = document.createElement("div");
+  date.className = "post-date";
+  date.textContent = formatDate(post.createdAt);
+
+  const badge = document.createElement("span");
+  badge.className = "badge" + (post.authorRole === "admin" ? " official" : "");
+  badge.textContent = post.authorRole === "admin"
+    ? "✓ OFFICIAL ANNOUNCEMENT"
+    : "CUSTOMER POST";
+
+  details.append(name, date, badge);
+  head.append(avatar, details);
+
+  const content = document.createElement("div");
+  content.className = "post-content";
+  // Use textContent: user-submitted HTML/JavaScript is never executed.
+  content.textContent = post.content || "";
+
+  card.append(head, content);
+
+  if (post.isOwnPost && post.authorRole === "customer") {
+    const actions = document.createElement("div");
+    actions.className = "post-actions";
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "button danger";
+    deleteButton.textContent = "Delete My Post";
+
+    deleteButton.addEventListener("click", async () => {
+      if (!window.confirm("Sigurado ka bang gusto mong burahin ang post na ito?")) {
+        return;
+      }
+
+      deleteButton.disabled = true;
+      try {
+        await api("/api/customer/newsfeed/" + encodeURIComponent(post.id), {
+          method: "DELETE"
+        });
+        await loadFeed();
+      } catch (error) {
+        window.alert(error.message);
+        deleteButton.disabled = false;
+      }
+    });
+
+    actions.append(deleteButton);
+    card.append(actions);
+  }
+
+  return card;
+}
+
+async function loadFeed() {
+  feedStatus.hidden = false;
+  feedStatus.textContent = "Loading Newsfeed...";
+  feed.replaceChildren();
+  loadMore.hidden = true;
+
+  try {
+    const data = await api("/api/customer/newsfeed");
+    const posts = Array.isArray(data.posts) ? data.posts : [];
+
+    if (posts.length === 0) {
+      feedStatus.textContent = "Wala pang post. Maging unang magbahagi sa community!";
+      return;
+    }
+
+    feedStatus.hidden = true;
+    const fragment = document.createDocumentFragment();
+    posts.forEach(post => fragment.append(createPostCard(post)));
+    feed.append(fragment);
+    loadMore.hidden = false;
+  } catch (error) {
+    feedStatus.textContent = error.message;
+    loadMore.hidden = false;
+  }
+}
+
+postContent.addEventListener("input", () => {
+  counter.textContent = postContent.value.length + " / 2000";
+});
+
+form.addEventListener("submit", async event => {
+  event.preventDefault();
+
+  const content = postContent.value.trim();
+  if (!content) {
+    showFormStatus("Maglagay muna ng mensahe bago mag-publish.", true);
+    return;
+  }
+
+  if (content.length > 2000) {
+    showFormStatus("Hanggang 2,000 character lamang ang post.", true);
+    return;
+  }
+
+  publishButton.disabled = true;
+  publishButton.textContent = "Publishing...";
+  showFormStatus("");
+
+  try {
+    await api("/api/customer/newsfeed", {
+      method: "POST",
+      body: JSON.stringify({ content })
+    });
+
+    postContent.value = "";
+    counter.textContent = "0 / 2000";
+    showFormStatus("Na-publish ang post mo!");
+    await loadFeed();
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  } catch (error) {
+    showFormStatus(error.message, true);
+  } finally {
+    publishButton.disabled = false;
+    publishButton.textContent = "Publish Post";
+  }
+});
+
+loadMore.addEventListener("click", loadFeed);
+
+loadFeed();
+</script>
+</body>
+</html>

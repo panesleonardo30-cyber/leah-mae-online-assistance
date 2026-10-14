@@ -7,6 +7,7 @@ const { createClient } = require("@supabase/supabase-js");
 const multer = require("multer");
 const createCustomerRoutes = require("./customer-routes");
 const createMessengerRoutes = require("./messenger-routes");
+const createNewsfeedRoutes = require("./newsfeed-routes");
 
 const app = express();
 const PORT = Number(process.env.PORT) || 3000;
@@ -155,6 +156,8 @@ const messengerRoutes = createMessengerRoutes(pool, {
     fileUpload: resultUpload
 });
 app.use(messengerRoutes.router);
+const newsfeedRoutes = createNewsfeedRoutes(pool, { requireAdmin });
+app.use(newsfeedRoutes.router);
 
 app.post("/api/admin/login", (req, res) => {
     if (!ADMIN_PASSWORD) {
@@ -592,6 +595,7 @@ initializeDatabase(async (err) => {
     try {
         await customerRoutes.initializeCustomerTables();
         await messengerRoutes.initializeMessengerTables();
+        await newsfeedRoutes.initializeNewsfeedTables();
     } catch (customerDbError) {
         console.error("Customer database initialization failed:", customerDbError.message);
         process.exit(1);

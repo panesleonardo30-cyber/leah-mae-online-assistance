@@ -235,6 +235,23 @@
         </div>
     </div>
 
+
+    <section id="adminNewsfeedSection" style="margin-top:24px;padding:20px;background:white;border:1px solid #ddd;border-radius:14px">
+        <h2>Official Announcements & Customer Newsfeed</h2>
+        <p>Mag-post ng official announcement na makikita ng mga naka-login na customer.</p>
+        <form id="adminNewsfeedForm">
+            <label for="adminNewsfeedContent">Announcement</label>
+            <textarea id="adminNewsfeedContent" maxlength="2000" required style="display:block;width:100%;min-height:110px;padding:12px;box-sizing:border-box" placeholder="Ilagay ang announcement dito..."></textarea>
+            <p><span id="adminNewsfeedCount">0</span>/2000 characters</p>
+            <button type="submit">Publish Official Announcement</button>
+            <p id="adminNewsfeedMessage" role="status"></p>
+        </form>
+        <hr>
+        <h3>Newsfeed Posts</h3>
+        <button type="button" id="refreshAdminNewsfeed">Refresh Posts</button>
+        <div id="adminNewsfeedPosts">Wala pang na-load na posts.</div>
+    </section>
+
 </div>
 
 <script>
@@ -272,6 +289,7 @@ document.getElementById("adminLoginForm").addEventListener("submit", async (even
         document.getElementById("loginPanel").hidden = true;
         document.getElementById("dashboard").hidden = false;
         await loadAppointments();
+        await loadAdminNewsfeed();
     } catch (error) {
         message.textContent = "Cannot connect to the server. Please try again.";
     }
@@ -596,7 +614,64 @@ async function deleteAppointment(id) {
 }
 
 
-function escapeHtml(value) {
+
+async function loadAdminNewsfeed() {
+ const box=document.getElementById("adminNewsfeedPosts");
+ if(!box)return;
+ try {
+  const r=await fetch("/api/admin/newsfeed");
+  if(r.status===401){showLogin("Mag-login muli.");return;}
+  const d=await r.json();
+  if(!r.ok||!d.success)throw Error(d.message||"Load failed");
+  box.replaceChildren();
+  if(!d.posts.length){box.textContent="Wala pang posts.";return;}
+  d.posts.forEach(p=>{
+   const card=document.createElement("article");
+   const title=document.createElement("strong");
+   title.textContent=p.authorName||"Customer";
+   const body=document.createElement("p");
+   body.textContent=p.content||"";
+   body.style.whiteSpace="pre-wrap";
+   const del=document.createElement("button");
+   del.textContent="Delete Post";
+   del.onclick=async()=>{
+    if(!confirm("Burahin ang post na ito?"))return;
+    const x=await fetch("/api/admin/newsfeed/"+encodeURIComponent(p.id),{method:"DELETE"});
+    const y=await x.json();
+    if(!x.ok||!y.success){alert(y.message||"Hindi nabura.");return;}
+    loadAdminNewsfeed();
+   };
+   card.append(title,body,del);
+   card.style.cssText="padding:12px;border:1px solid #ddd;margin:10px 0";
+   box.appendChild(card);
+  });
+ }catch(e){box.textContent=e.message||"Hindi ma-load.";}
+}
+(function(){
+ const f=document.getElementById("adminNewsfeedForm");
+ const i=document.getElementById("adminNewsfeedContent");
+ const m=document.getElementById("adminNewsfeedMessage");
+ const c=document.getElementById("adminNewsfeedCount");
+ const b=document.getElementById("refreshAdminNewsfeed");
+ if(!f||!i||!m)return;
+ i.oninput=()=>{if(c)c.textContent=i.value.length;};
+ if(b)b.onclick=loadAdminNewsfeed;
+ f.onsubmit=async e=>{
+  e.preventDefault();
+  if(!i.value.trim()){m.textContent="Ilagay ang announcement.";return;}
+  m.textContent="Ipinapadala...";
+  try{
+   const r=await fetch("/api/admin/newsfeed",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:i.value.trim()})});
+   const d=await r.json();
+   if(r.status===401){showLogin("Mag-login muli.");return;}
+   if(!r.ok||!d.success)throw Error(d.message||"Hindi na-publish.");
+   f.reset();if(c)c.textContent="0";
+   m.textContent="Matagumpay na na-publish!";
+   await loadAdminNewsfeed();
+  }catch(x){m.textContent=x.message||"May error.";}
+ };
+})();
+\nfunction escapeHtml(value) {
 
     const div = document.createElement("div");
 

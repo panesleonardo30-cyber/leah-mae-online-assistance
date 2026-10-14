@@ -1,6 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const { promisify } = require("util");
+const multer = require("multer");
 
 const scrypt = promisify(crypto.scrypt);
 const SESSION_LIFETIME = 7 * 24 * 60 * 60 * 1000;
@@ -8,6 +9,24 @@ const SESSION_LIFETIME = 7 * 24 * 60 * 60 * 1000;
 module.exports = function createCustomerRoutes(pool, storageConfig = {}) {
     const supabase = storageConfig.supabase || null;
     const STORAGE_BUCKET = storageConfig.storageBucket || "appointment-results";
+
+    const AVATAR_BUCKET = "customer-avatars";
+    const avatarUpload = multer({
+        storage: multer.memoryStorage(),
+        limits: { fileSize: 3 * 1024 * 1024 },
+        fileFilter(req, file, callback) {
+            const ext = require("path").extname(file.originalname || "").toLowerCase();
+            const allowed =
+                (file.mimetype === "image/jpeg" && [".jpg", ".jpeg"].includes(ext)) ||
+                (file.mimetype === "image/png" && ext === ".png");
+
+            if (!allowed) {
+                return callback(new Error("JPG o PNG lamang ang pinapayagan."));
+            }
+            callback(null, true);
+        }
+    });
+
     const router = express.Router();
     const loginAttempts = new Map();
 
@@ -49,7 +68,8 @@ module.exports = function createCustomerRoutes(pool, storageConfig = {}) {
         if (!token) return null;
 
         const result = await pool.query(
-            `SELECT a.id, a.email, a.full_name, a.contact, a.address
+            `SELECT a.id, a.email, a.full_name, a.contact, a.address,
+                    a.avatar_path
              FROM public.customer_sessions s
              JOIN public.customer_accounts a ON a.id = s.customer_id
              WHERE s.token_hash = $1 AND s.expires_at > NOW()`,
@@ -94,6 +114,11 @@ module.exports = function createCustomerRoutes(pool, storageConfig = {}) {
                 created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
                 updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
             )
+        `);
+
+        await pool.query(`
+            ALTER TABLE public.customer_accounts
+            ADD COLUMN IF NOT EXISTS avatar_path TEXT
         `);
 
         await pool.query(`
@@ -256,18 +281,173 @@ module.exports = function createCustomerRoutes(pool, storageConfig = {}) {
         }
     });
 
-    router.get("/api/customer/me", requireCustomer, (req, res) => {
-        res.json({
-            success: true,
-            customer: {
-                id: req.customer.id,
-                email: req.customer.email,
-                fullName: req.customer.full_name,
-                contact: req.customer.contact,
-                address: req.customer.address
+    router.get("/api/customer/me", requireCustomer, async (req, res) => {
+        try {
+            let avatarUrl = null;
+
+            if (req.customer.avatar_path && supabase) {
+                const { data, error } = await supabase.storage
+                    .from(AVATAR_BUCKET)
+                    .createSignedUrl(req.customer.avatar_path, 3600);
+
+                if (error) {
+                    console.error("Avatar URL error:", error.message);
+                } else {
+                    avatarUrl = data?.signedUrl || null;
+                }
             }
-        });
+
+            res.json({
+                success: true,
+                customer: {
+                    id: req.customer.id,
+                    email: req.customer.email,
+                    fullName: req.customer.full_name,
+                    contact: req.customer.contact,
+                    address: req.customer.address,
+                    avatarUrl
+                }
+            });
+        } catch (err) {
+            console.error("Customer profile load error:", err.message);
+            res.status(500).json({
+                success: false,
+                message: "Hindi ma-load ang customer profile."
+            });
+        }
     });
+
+    router.post(
+        "/api/customer/avatar",
+        requireCustomer,
+        (req, res, next) => {
+            avatarUpload.single("avatar")(req, res, (err) => {
+                if (err) {
+                    return res.status(400).json({
+                        success: false,
+                        message: err.code === "LIMIT_FILE_SIZE"
+                            ? "Maximum na 3 MB ang profile picture."
+                            : err.message || "Hindi tinanggap ang larawan."
+                    });
+                }
+                next();
+            });
+        },
+        async (req, res) => {
+            let newPath = null;
+
+            try {
+                if (!supabase) {
+                    return res.status(503).json({
+                        success: false,
+                        message: "Hindi pa naka-configure ang image storage."
+                    });
+                }
+
+                if (!req.file) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Pumili muna ng JPG o PNG na larawan."
+                    });
+                }
+
+                const file = req.file;
+                const isJpeg =
+                    file.mimetype === "image/jpeg" &&
+                    file.buffer.length >= 3 &&
+                    file.buffer[0] === 255 &&
+                    file.buffer[1] === 216 &&
+                    file.buffer[2] === 255;
+
+                const isPng =
+                    file.mimetype === "image/png" &&
+                    file.buffer.length >= 8 &&
+                    file.buffer.subarray(0, 8).equals(
+                        Buffer.from([137, 80, 78, 71, 13, 10, 26, 10])
+                    );
+
+                if (!isJpeg && !isPng) {
+                    return res.status(400).json({
+                        success: false,
+                        message: "Hindi tugma ang file content sa JPG o PNG."
+                    });
+                }
+
+                const ext = isJpeg ? "jpg" : "png";
+                const contentType = isJpeg ? "image/jpeg" : "image/png";
+                newPath = `${req.customer.id}/${Date.now()}-${crypto.randomUUID()}.${ext}`;
+
+                const { error: uploadError } = await supabase.storage
+                    .from(AVATAR_BUCKET)
+                    .upload(newPath, file.buffer, {
+                        contentType,
+                        upsert: false
+                    });
+
+                if (uploadError) {
+                    console.error("Avatar upload error:", uploadError.message);
+                    return res.status(502).json({
+                        success: false,
+                        message: "Hindi na-upload ang larawan sa storage."
+                    });
+                }
+
+                const update = await pool.query(
+                    `UPDATE public.customer_accounts
+                     SET avatar_path = $1, updated_at = NOW()
+                     WHERE id = $2`,
+                    [newPath, req.customer.id]
+                );
+
+                if (!update.rowCount) {
+                    throw new Error("Hindi makita ang customer account.");
+                }
+
+                const { data: signed, error: signedError } = await supabase.storage
+                    .from(AVATAR_BUCKET)
+                    .createSignedUrl(newPath, 3600);
+
+                if (signedError) {
+                    console.error("Avatar signed URL error:", signedError.message);
+                }
+
+                res.json({
+                    success: true,
+                    message: "Na-update ang profile picture.",
+                    avatarUrl: signed?.signedUrl || null
+                });
+
+                // Delete the old image only after the database update succeeds.
+                const oldPath = req.customer.avatar_path;
+                if (oldPath && oldPath !== newPath) {
+                    supabase.storage
+                        .from(AVATAR_BUCKET)
+                        .remove([oldPath])
+                        .then(({ error }) => {
+                            if (error) {
+                                console.error("Old avatar cleanup error:", error.message);
+                            }
+                        })
+                        .catch(err => console.error("Old avatar cleanup error:", err.message));
+                }
+            } catch (err) {
+                console.error("Customer avatar error:", err.message);
+
+                if (newPath && supabase) {
+                    try {
+                        await supabase.storage.from(AVATAR_BUCKET).remove([newPath]);
+                    } catch (_) {}
+                }
+
+                if (!res.headersSent) {
+                    res.status(500).json({
+                        success: false,
+                        message: "Hindi na-save ang profile picture."
+                    });
+                }
+            }
+        }
+    );
 
     router.put("/api/customer/profile", requireCustomer, async (req, res) => {
         try {

@@ -602,9 +602,9 @@ initializeDatabase(async (err) => {
         return;
     }
 
-    app.listen(PORT, () => {
+    app.listen(PORT, "0.0.0.0", () => {
         console.log(
-            `Leah Mae Online Assistance running at http://localhost:${PORT}`
+            `Leah Mae Online Assistance listening on 0.0.0.0:${PORT}`
         );
     });
 });
